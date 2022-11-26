@@ -241,26 +241,29 @@ function wc_get_path_define_tokens() {
  */
 function wc_get_template_part( $slug, $name = '' ) {
 	$cache_key = sanitize_key( implode( '-', array( 'template-part', $slug, $name, Constants::get_constant( 'WC_VERSION' ) ) ) );
-	$template  = (string) wp_cache_get( $cache_key, 'woocommerce' );
+	$cache_value  = (string) wp_cache_get( $cache_key, 'woocommerce' );
 
-	if ( ! $template ) {
+	if ( ! $cache_value ) {
 		if ( $name ) {
-			$template = WC_TEMPLATE_DEBUG_MODE ? '' : locate_template(
+			// Get template path from current theme or child theme
+			$template_path = WC_TEMPLATE_DEBUG_MODE ? '' : locate_template(
 				array(
 					"{$slug}-{$name}.php",
 					WC()->template_path() . "{$slug}-{$name}.php",
 				)
 			);
 
-			if ( ! $template ) {
+			// In case no template path found in current theme, look again in this plugin
+			if ( ! $template_path ) {
 				$fallback = WC()->plugin_path() . "/templates/{$slug}-{$name}.php";
-				$template = file_exists( $fallback ) ? $fallback : '';
+				$template_path = file_exists( $fallback ) ? $fallback : '';
 			}
 		}
 
-		if ( ! $template ) {
-			// If template file doesn't exist, look in yourtheme/slug.php and yourtheme/woocommerce/slug.php.
-			$template = WC_TEMPLATE_DEBUG_MODE ? '' : locate_template(
+		// If $name is not provided or $name is invalid,
+		// look once last time in current theme dir with $slug only.
+		if ( ! $template_path ) {
+			$template_path = WC_TEMPLATE_DEBUG_MODE ? '' : locate_template(
 				array(
 					"{$slug}.php",
 					WC()->template_path() . "{$slug}.php",
@@ -269,19 +272,19 @@ function wc_get_template_part( $slug, $name = '' ) {
 		}
 
 		// Don't cache the absolute path so that it can be shared between web servers with different paths.
-		$cache_path = wc_tokenize_path( $template, wc_get_path_define_tokens() );
+		$cache_value = wc_tokenize_path( $template_path, wc_get_path_define_tokens() );
 
-		wc_set_template_cache( $cache_key, $cache_path );
+		wc_set_template_cache( $cache_key, $cache_value );
 	} else {
 		// Make sure that the absolute path to the template is resolved.
-		$template = wc_untokenize_path( $template, wc_get_path_define_tokens() );
+		$template_path = wc_untokenize_path( $cache_value, wc_get_path_define_tokens() );
 	}
 
 	// Allow 3rd party plugins to filter template file from their plugin.
-	$template = apply_filters( 'wc_get_template_part', $template, $slug, $name );
+	$template_path = apply_filters( 'wc_get_template_part', $template_path, $slug, $name );
 
-	if ( $template ) {
-		load_template( $template, false );
+	if ( $template_path ) {
+		load_template( $template_path, false );
 	}
 }
 
